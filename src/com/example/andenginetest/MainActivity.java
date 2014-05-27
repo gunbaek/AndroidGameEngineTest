@@ -22,12 +22,17 @@ public class MainActivity extends SimpleBaseGameActivity
  private static final int CAMERA_WIDTH = 720;
  private static final int CAMERA_HEIGHT = 480;
  
+ private BitmapTextureAtlas BtaJoysticBg;
+ private BitmapTextureAtlas BtaJoysticPoint;
+ 
  private BitmapTextureAtlas mBitmapTextureAtlas;
  private BitmapTextureAtlas BtaBtnMoveR;
  private BitmapTextureAtlas BtaBtnMoveL;
  private BitmapTextureAtlas BtaBtnMoveU;
  private BitmapTextureAtlas BtaBtnMoveD;
  
+ private TiledTextureRegion TrJoysticBg;
+ private TiledTextureRegion TrJoysticPoint;
  private TiledTextureRegion mPlayerTextureRegion;
  private TiledTextureRegion TrBtnMoveR;
  private TiledTextureRegion TrBtnMoveL;
@@ -80,6 +85,13 @@ public class MainActivity extends SimpleBaseGameActivity
      BtaBtnMoveL.load();
      BtaBtnMoveR.load();
      BtaBtnMoveU.load();
+     
+     //Joystic 생성
+     BtaJoysticBg = new BitmapTextureAtlas(getTextureManager(), 500, 500, TextureOptions.BILINEAR);
+     BtaJoysticPoint = new BitmapTextureAtlas(getTextureManager(), 50, 50, TextureOptions.BILINEAR);
+     TrJoysticBg = new BitmapTextureAtlasTextureRegionFactory().createTiledFromAsset(BtaJoysticBg, this, "joysticBg.png", 0, 0, 1,1);
+     TrJoysticPoint = new BitmapTextureAtlasTextureRegionFactory().createTiledFromAsset(BtaJoysticPoint, this, "joysticPoint.png", 0, 0, 1,1);
+     
  }
  
 // onCreateScene()에서는 화면에 관련된 scene object를 초기화 합니다.
@@ -102,6 +114,7 @@ public class MainActivity extends SimpleBaseGameActivity
   player.animate(new long[]{200, 200, 200}, 0, 2, true);
   
   scene.attachChild(player);
+
 
   //btn setting
   Sprite SpriteBtnMoveU = new Sprite(100, CAMERA_HEIGHT - 220, 80, 80, TrBtnMoveU, vertexBufferObjectManager){
@@ -209,8 +222,36 @@ public class MainActivity extends SimpleBaseGameActivity
 		  super.onManagedUpdate(pSecondsElapsed);
 	  };
   };
+
+  final float JoysticBgWidth = 200;
+  final float JoysticBgHeight = 200;
+  final float JoysticBgMerginX = 100;
+  final float JoysticBgMerginY = 100;
+  final float JoysticBgLeft = CAMERA_WIDTH - JoysticBgWidth - JoysticBgMerginX;
+  final float JoysticBgRight = CAMERA_WIDTH - JoysticBgMerginX; 
+  final float JoysticBgTop = CAMERA_HEIGHT - JoysticBgMerginY - JoysticBgHeight;
+  final float JoysticBgButtom = CAMERA_HEIGHT - JoysticBgMerginY ;
+  final Sprite SpriteJoysticPoint = new Sprite(0,0,25,25,TrJoysticPoint, vertexBufferObjectManager);
   
+  Sprite SpriteJoysticBg = new Sprite(JoysticBgLeft, JoysticBgTop, JoysticBgWidth, JoysticBgHeight, TrJoysticBg, vertexBufferObjectManager){
+	  @Override
+	  public boolean onAreaTouched(final TouchEvent TouchE, final float TouchX, final float TouchY) {
+		  if(TouchX >= JoysticBgLeft && TouchX <= JoysticBgRight 
+				  && TouchY >= JoysticBgTop && TouchY <= JoysticBgButtom){
+			  SpriteJoysticPoint.setPosition(TouchY - SpriteJoysticPoint.getWidth()/2, TouchY - SpriteJoysticPoint.getHeight()/2);
+			  SpriteJoysticPoint.setVisible(true);
+			  
+		  }
+		  return false;
+	  }  
+	  @Override
+	  protected void onManagedUpdate(float pSecondsElapsed) {
+
+		  super.onManagedUpdate(pSecondsElapsed);
+	  };
+  };
  
+  
   scene.attachChild(SpriteBtnMoveR);
   scene.attachChild(SpriteBtnMoveL);
   scene.attachChild(SpriteBtnMoveU);
@@ -220,7 +261,14 @@ public class MainActivity extends SimpleBaseGameActivity
   scene.registerTouchArea(SpriteBtnMoveL);
   scene.registerTouchArea(SpriteBtnMoveU);
   scene.registerTouchArea(SpriteBtnMoveD);
+
+  SpriteJoysticPoint.setVisible(false);
+  scene.attachChild(SpriteJoysticPoint);
+  scene.attachChild(SpriteJoysticBg);
+  scene.registerTouchArea(SpriteJoysticBg);
   scene.setTouchAreaBindingOnActionDownEnabled(true);
+  
+  
   return scene;
  }
 }
