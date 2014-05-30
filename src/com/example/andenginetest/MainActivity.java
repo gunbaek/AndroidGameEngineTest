@@ -1,5 +1,6 @@
 package com.example.andenginetest;
 
+import java.text.*;
 import java.util.*;
 
 import org.andengine.engine.camera.*;
@@ -22,6 +23,7 @@ import org.andengine.opengl.vbo.*;
 import org.andengine.ui.activity.*;
 import org.andengine.util.*;
 
+import android.content.*;
 import android.graphics.*;
 import android.util.*;
 
@@ -30,37 +32,45 @@ public class MainActivity extends SimpleBaseGameActivity {
 	private Camera camera;
 	private static int CAMERA_WIDTH = 720;
 	private static int CAMERA_HEIGHT = 480;
-
+	
+	private SharedPreferences mPrefs;
 	private BitmapTextureAtlas BtaJoysticBg;
-	private BitmapTextureAtlas mBitmapTextureAtlas;
+	private BitmapTextureAtlas BtaSpritePlayer;
 	private BitmapTextureAtlas BtaMesile;
-
+	private BitmapTextureAtlas BtaTitle;
+	
 	private TiledTextureRegion TrMesile;
 	private TiledTextureRegion TrJoysticBg;
-	private TiledTextureRegion mPlayerTextureRegion;
+	private TiledTextureRegion TrSpritePlayer;
+	private TiledTextureRegion TrTitle;
 	private TextureRegion TrBg;
+	
 	private RepeatingSpriteBackground mGrassBackground;
-	AnimatedSprite player;
-
+	private AnimatedSprite SpritePlayer;
+	private AnimatedSprite SpriteTitle;
+	
 	private Text ScoreText;
 	private Text TopScoreText;
-
+	private Text StartText;
+	
 	private List<mesile> mesileList;
 	private boolean isClick = false;
 	public Scene scene;
 
 	private Font mFont;
+	private Font StartTextFont;
 	private TimeScore TimeScoreThread;
-
+	private Thread CreateMesileSpriteThread;
+	double Score = 0;
+	double TopScore = 0;
+	boolean isGameStart = false;
+	
 	private class TimeScore extends Thread {
 		long start, end;
-		double Score = 0;
-		double TopScore = 0;
-
 		@Override
 		public void run() {
 			start = System.currentTimeMillis();
-			while (true) {
+			while (isGameStart) {
 				end = System.currentTimeMillis();
 				Score = (Math.round(end - start) / 1000.0);
 				ScoreText.setText("Score : " + Score + " Sec");
@@ -71,8 +81,50 @@ public class MainActivity extends SimpleBaseGameActivity {
 			if (Score > TopScore) {
 				TopScore = Score;
 				TopScoreText.setText("Top : " + TopScore + " Sec");
+				SharedPreferences.Editor editor = mPrefs.edit();
+                editor.putFloat("TopScore", (float) TopScore);
+                editor.commit();
 			}
-			start = System.currentTimeMillis();
+		}
+	}
+	private class MesileThread extends Thread{
+		@Override
+		public synchronized void run() {
+			double pos;
+			float StartX, StartY;
+			while (isGameStart) {
+				pos = Math.random();
+				if (pos >= 3 / 4) {
+					// top
+					StartX = (float) (Math.random() * CAMERA_WIDTH);
+					StartY = 0;
+				} else if (pos >= 2 / 4) {
+					// btm
+					StartX = (float) (Math.random() * CAMERA_WIDTH);
+					StartY = CAMERA_HEIGHT;
+				} else if (pos >= 1 / 4) {
+					// right
+					StartX = 0;
+					StartY = (float) (Math.random() * CAMERA_HEIGHT);
+				} else {
+					// left
+					StartX = CAMERA_WIDTH;
+					StartY = (float) (Math.random() * CAMERA_HEIGHT);
+				}
+				mesile tempMesile = new mesile(StartX, StartY, 30, 30,
+						TrMesile, getVertexBufferObjectManager());
+				tempMesile.animate(new long[] { 200, 200, 200, 200, 200,
+						200 }, 0, 5, true);
+				mesileList.add(tempMesile);
+				try {
+					Thread.sleep(1000);
+					if(!isGameStart)
+						clearMesile();
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+				scene.attachChild(tempMesile);
+			}
 		}
 	}
 	private class mesile extends AnimatedSprite {
@@ -122,7 +174,7 @@ public class MainActivity extends SimpleBaseGameActivity {
 		}
 
 		public void collide() {
-			if (this.collidesWith(player)) {
+			if (this.collidesWith(SpritePlayer)) {
 				Iterator<mesile> itr = mesileList.iterator();
 				while (itr.hasNext()) {
 					scene.detachChild(itr.next());
@@ -147,13 +199,13 @@ public class MainActivity extends SimpleBaseGameActivity {
 	@Override
 	protected void onCreateResources() {
 		BitmapTextureAtlasTextureRegionFactory.setAssetBasePath("gfx/");
-		//Player 생성
-		this.mBitmapTextureAtlas = new BitmapTextureAtlas(
+		//SpritePlayer 생성
+		this.BtaSpritePlayer = new BitmapTextureAtlas(
 				this.getTextureManager(), 2048, 512, TextureOptions.BILINEAR);
-		this.mPlayerTextureRegion = BitmapTextureAtlasTextureRegionFactory
-				.createTiledFromAsset(this.mBitmapTextureAtlas, this,
+		this.TrSpritePlayer = BitmapTextureAtlasTextureRegionFactory
+				.createTiledFromAsset(this.BtaSpritePlayer, this,
 						"player.png", 0, 0, 4, 1);
-		this.mBitmapTextureAtlas.load();
+		this.BtaSpritePlayer.load();
 
 		// Joystic 생성
 		BtaJoysticBg = new BitmapTextureAtlas(getTextureManager(), 2, 2,
@@ -178,18 +230,32 @@ public class MainActivity extends SimpleBaseGameActivity {
 				this.getTextureManager(), 256, 256,
 				Typeface.create(Typeface.DEFAULT, Typeface.BOLD), 32,
 				Color.WHITE);
+		StartTextFont = FontFactory.create(this.getFontManager(),
+				this.getTextureManager(), 256, 256,
+				Typeface.create(Typeface.DEFAULT, Typeface.BOLD), 50,
+				Color.WHITE);
+		// Title 생성
+		BtaTitle = new BitmapTextureAtlas(getTextureManager(), 512, 256,
+				TextureOptions.BILINEAR);
+		TrTitle = new BitmapTextureAtlasTextureRegionFactory()
+		.createTiledFromAsset(BtaTitle, this, "title.png", 0, 0, 1, 1);
+		
+		StartTextFont.load();
 		mFont.load();
-
 		BtaMesile.load();
 		BtaJoysticBg.load();
-
+		BtaTitle.load();
+		
+		mPrefs = getSharedPreferences("TopScore",android.content.Context.MODE_PRIVATE);
+    	TopScore = mPrefs.getFloat("TopScore", 0);
+    	Log.i("TopScore", "TopScore : " + TopScore);
 	}
 	@Override
 	protected Scene onCreateScene() {
 		final VertexBufferObjectManager vertexBufferObjectManager = this.getVertexBufferObjectManager();
 
-		final float playerX = (CAMERA_WIDTH - this.mPlayerTextureRegion.getWidth()) / 2;
-		final float playerY = CAMERA_HEIGHT	- this.mPlayerTextureRegion.getHeight() - 5;
+		final float SpritePlayerX = (CAMERA_WIDTH - this.TrSpritePlayer.getWidth()) / 2;
+		final float SpritePlayerY = CAMERA_HEIGHT	- this.TrSpritePlayer.getHeight() - 5;
 		final float JoysticBgWidth = CAMERA_WIDTH;
 		final float JoysticBgHeight = CAMERA_HEIGHT;
 		final float JoysticBgMerginX = 0;
@@ -200,13 +266,19 @@ public class MainActivity extends SimpleBaseGameActivity {
 		final float JoysticBgBottum = CAMERA_HEIGHT - JoysticBgMerginY;
 
 		scene = new Scene();
+		DecimalFormat t = new DecimalFormat("#.000");
 		ScoreText = new Text(40, 40, mFont, "Score : 0", 50, new TextOptions(HorizontalAlign.LEFT), vertexBufferObjectManager);
-		TopScoreText = new Text(40, 80, mFont, "Top : 0", 50, new TextOptions(HorizontalAlign.LEFT), vertexBufferObjectManager);
-		
-		//player Sprite
-		player = new AnimatedSprite(playerX, playerY, 40, 40, this.mPlayerTextureRegion, vertexBufferObjectManager);
-		player.setScaleCenterY(this.mPlayerTextureRegion.getHeight());
-		player.animate(new long[] { 200, 200, 200, 200 }, 0, 3, true);
+		TopScoreText = new Text(40, 80, mFont, "Top : "+t.format(TopScore)+"Sec", 50, new TextOptions(HorizontalAlign.LEFT), vertexBufferObjectManager);
+		StartText = new Text(0,0, StartTextFont, "Push to Start", 50, new TextOptions(HorizontalAlign.CENTER), vertexBufferObjectManager);
+
+		//Title Sprite
+		SpriteTitle = new AnimatedSprite(SpritePlayerX, SpritePlayerY, 512, 256, TrTitle, vertexBufferObjectManager);
+		StartText.setPosition((CAMERA_WIDTH - StartText.getWidth())/2, CAMERA_HEIGHT/2 + SpriteTitle.getHeight()/2 + 30);
+
+		//SpritePlayer Sprite
+		SpritePlayer = new AnimatedSprite(SpritePlayerX, SpritePlayerY, 40, 40, this.TrSpritePlayer, vertexBufferObjectManager);
+		SpritePlayer.setScaleCenterY(this.TrSpritePlayer.getHeight());
+		SpritePlayer.animate(new long[] { 200, 200, 200, 200 }, 0, 3, true);
 		
 		//JoysticBg Sprite
 		Sprite SpriteJoysticBg = new Sprite(JoysticBgLeft, JoysticBgTop,
@@ -219,34 +291,44 @@ public class MainActivity extends SimpleBaseGameActivity {
 
 			int minX = 0;
 			int maxX = (int) getEngine().getCamera().getWidth()
-					- (int) player.getWidth();
+					- (int) SpritePlayer.getWidth();
 			int minY = 0;
 			int maxY = (int) getEngine().getCamera().getHeight()
-					- (int) player.getHeight();
+					- (int) SpritePlayer.getHeight();
 
 			@Override
 			public boolean onAreaTouched(final TouchEvent TouchE,
 					final float TouchX, final float TouchY) {
 				// Log.i("SpriteJoysticBg","Touch X:"+TouchX+" Y:"+TouchY);
 
-				if (PreMoveX != 0) {
-					MoveX = (float) ((TouchX - PreMoveX) * 0.8);
-					MoveY = (float) ((TouchY - PreMoveY) * 0.8);
-				}
-				PreMoveX = TouchX;
-				PreMoveY = TouchY;
+				
+				if(!isGameStart && !isClick){
+					GameStart();
+				}else{
+					if (PreMoveX != 0) {
+						MoveX = (float) ((TouchX - PreMoveX) * 0.8);
+						MoveY = (float) ((TouchY - PreMoveY) * 0.8);
+					}
+					PreMoveX = TouchX;
+					PreMoveY = TouchY;
+		
+					// SpriteJoysticPoint.setPosition(JoysticBgLeft + TouchX -
+					// SpriteJoysticPoint.getWidth()/2,JoysticBgTop + TouchY -
+					// SpriteJoysticPoint.getHeight()/2);
+					// SpriteJoysticPoint.setVisible(true);
 
-				// SpriteJoysticPoint.setPosition(JoysticBgLeft + TouchX -
-				// SpriteJoysticPoint.getWidth()/2,JoysticBgTop + TouchY -
-				// SpriteJoysticPoint.getHeight()/2);
-				// SpriteJoysticPoint.setVisible(true);
-				isClick = true;
-				if (TouchE.getAction() == TouchEvent.ACTION_UP) {
-					// SpriteJoysticPoint.setVisible(false);
-					PreMoveX = 0;
-					PreMoveY = 0;
-					MoveX = 0;
-					MoveY = 0;
+					if (TouchE.getAction() == TouchEvent.ACTION_UP) {
+						// SpriteJoysticPoint.setVisible(false);
+						PreMoveX = 0;
+						PreMoveY = 0;
+						MoveX = 0;
+						MoveY = 0;
+					}
+				}
+				if(TouchE.getAction() == TouchEvent.ACTION_DOWN){
+					isClick = true;
+				}else if(TouchE.getAction() == TouchEvent.ACTION_UP){
+					isClick = false;
 				}
 				return false;
 			}
@@ -254,19 +336,19 @@ public class MainActivity extends SimpleBaseGameActivity {
 			@Override
 			protected void onManagedUpdate(float pSecondsElapsed) {
 				if (isClick) {
-					if (player.getX() + MoveX < minX) {
-						player.setPosition(minX, player.getY());
-					} else if (player.getX() + MoveX > maxX) {
-						player.setPosition(maxX, player.getY());
-					} else if (player.getX() >= minX && player.getX() <= maxX) {
-						player.setPosition(player.getX() + MoveX, player.getY());
+					if (SpritePlayer.getX() + MoveX < minX) {
+						SpritePlayer.setPosition(minX, SpritePlayer.getY());
+					} else if (SpritePlayer.getX() + MoveX > maxX) {
+						SpritePlayer.setPosition(maxX, SpritePlayer.getY());
+					} else if (SpritePlayer.getX() >= minX && SpritePlayer.getX() <= maxX) {
+						SpritePlayer.setPosition(SpritePlayer.getX() + MoveX, SpritePlayer.getY());
 					}
-					if (player.getY() + MoveY < minY) {
-						player.setPosition(player.getX(), minY);
-					} else if (player.getY() + MoveY > maxY) {
-						player.setPosition(player.getX(), maxY);
-					} else if (player.getY() >= minY && player.getY() <= maxY) {
-						player.setPosition(player.getX(), player.getY() + MoveY);
+					if (SpritePlayer.getY() + MoveY < minY) {
+						SpritePlayer.setPosition(SpritePlayer.getX(), minY);
+					} else if (SpritePlayer.getY() + MoveY > maxY) {
+						SpritePlayer.setPosition(SpritePlayer.getX(), maxY);
+					} else if (SpritePlayer.getY() >= minY && SpritePlayer.getY() <= maxY) {
+						SpritePlayer.setPosition(SpritePlayer.getX(), SpritePlayer.getY() + MoveY);
 					}
 				}
 
@@ -276,44 +358,7 @@ public class MainActivity extends SimpleBaseGameActivity {
 		mesileList = new ArrayList<mesile>();
 		
 		//CreateMesileSpriteThread 
-		Thread CreateMesileSpriteThread = new Thread(new Runnable() {
-			@Override
-			public void run() {
-				double pos;
-				float StartX, StartY;
-				while (true) {
-					pos = Math.random();
-					if (pos >= 3 / 4) {
-						// top
-						StartX = (float) (Math.random() * CAMERA_WIDTH);
-						StartY = 0;
-					} else if (pos >= 2 / 4) {
-						// btm
-						StartX = (float) (Math.random() * CAMERA_WIDTH);
-						StartY = CAMERA_HEIGHT;
-					} else if (pos >= 1 / 4) {
-						// right
-						StartX = 0;
-						StartY = (float) (Math.random() * CAMERA_HEIGHT);
-					} else {
-						// left
-						StartX = CAMERA_WIDTH;
-						StartY = (float) (Math.random() * CAMERA_HEIGHT);
-					}
-					mesile tempMesile = new mesile(StartX, StartY, 30, 30,
-							TrMesile, vertexBufferObjectManager);
-					tempMesile.animate(new long[] { 200, 200, 200, 200, 200,
-							200 }, 0, 5, true);
-					mesileList.add(tempMesile);
-					try {
-						Thread.sleep(1000);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
-					scene.attachChild(tempMesile);
-				}
-			}
-		});
+		CreateMesileSpriteThread = new MesileThread();
 		TimeScoreThread = new TimeScore();
 		
 		scene.registerTouchArea(SpriteJoysticBg);
@@ -321,35 +366,54 @@ public class MainActivity extends SimpleBaseGameActivity {
 		scene.setBackground(this.mGrassBackground);
 		scene.registerUpdateHandler(new IUpdateHandler() {
 			@Override
-			public void reset() {
-			}
+			public void reset() {	}
 
 			@Override
 			public void onUpdate(final float pSecondsElapsed) {
 
 				int ListSize = mesileList.size() - 1;
 				for (int i = 0; i < ListSize; i++) {
-					if (mesileList.get(i).collidesWith(player)) {
+					if (mesileList.get(i).collidesWith(SpritePlayer)) {
 						Log.e("Collide", "!!");
-						for (int j = 0; j < ListSize; j++) {
-							scene.detachChild(mesileList.get(0));
-							mesileList.remove(0);
-						}
-						TimeScoreThread.reset();
+						GameStop();
 						break;
 					}
 				}
-
 			}
 		});
-		
+		scene.attachChild(SpriteTitle);
+		scene.attachChild(StartText);
+		scene.attachChild(SpritePlayer);
 		scene.attachChild(SpriteJoysticBg);
-		scene.attachChild(player);
 		scene.attachChild(ScoreText);
 		scene.attachChild(TopScoreText);
 		
-		CreateMesileSpriteThread .start();
-		TimeScoreThread.start();
+		GameStop();
 		return scene;
+	}
+	public void GameStop(){
+		isGameStart = false;
+		TimeScoreThread.reset();
+		SpritePlayer.setVisible(false);
+		SpriteTitle.setVisible(true);
+		StartText.setVisible(true);
+		clearMesile();
+	}
+	public void GameStart(){
+		clearMesile();
+		isGameStart = true;
+		SpritePlayer.setVisible(true);
+		SpriteTitle.setVisible(false);
+		StartText.setVisible(false);
+		TimeScoreThread = new TimeScore();
+		TimeScoreThread.start();
+		CreateMesileSpriteThread = new MesileThread();
+		CreateMesileSpriteThread.start();
+	}
+	public synchronized void clearMesile(){
+		for (int j = 0; j < mesileList.size(); j++) {
+			scene.detachChild(mesileList.get(0));
+			mesileList.remove(0);
+		}
 	}
 }
