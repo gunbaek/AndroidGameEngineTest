@@ -1,4 +1,4 @@
-package com.example.andenginetest;
+package turtlenamdeveloper.game.nemododge;
 
 import java.text.*;
 import java.util.*;
