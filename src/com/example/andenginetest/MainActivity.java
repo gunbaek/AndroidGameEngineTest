@@ -272,7 +272,8 @@ public class MainActivity extends SimpleBaseGameActivity {
 		StartText = new Text(0,0, StartTextFont, "Push to Start", 50, new TextOptions(HorizontalAlign.CENTER), vertexBufferObjectManager);
 
 		//Title Sprite
-		SpriteTitle = new AnimatedSprite(SpritePlayerX, SpritePlayerY, 512, 256, TrTitle, vertexBufferObjectManager);
+		SpriteTitle = new AnimatedSprite(0, 0, 512, 256, TrTitle, vertexBufferObjectManager);
+		SpriteTitle.setPosition((CAMERA_WIDTH - SpriteTitle.getWidth())/2, (CAMERA_HEIGHT - SpriteTitle.getHeight())/2);
 		StartText.setPosition((CAMERA_WIDTH - StartText.getWidth())/2, CAMERA_HEIGHT/2 + SpriteTitle.getHeight()/2 + 30);
 
 		//SpritePlayer Sprite
